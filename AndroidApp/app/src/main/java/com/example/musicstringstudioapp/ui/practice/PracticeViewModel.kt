@@ -61,8 +61,12 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
      */
     private fun processAudioData(audioData: FloatArray) {
         viewModelScope.launch {
+            Timber.d("Processing audio data: ${audioData.size} samples")
+            
             // 检测音高
             val pitchResult = pitchDetector.detectPitch(audioData)
+            
+            Timber.d("Pitch detection result: freq=${pitchResult.frequency}, confidence=${pitchResult.confidence}, silent=${pitchResult.isSilent}")
             
             if (pitchResult.isSilent || pitchResult.frequency <= 0) {
                 // 静音或无法检测

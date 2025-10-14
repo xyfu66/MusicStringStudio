@@ -23,10 +23,10 @@ class PitchDetector(
         private const val MAX_FREQUENCY = 4186.0f
         
         // 静音阈值（能量）
-        private const val SILENCE_THRESHOLD = 0.01f
+        private const val SILENCE_THRESHOLD = 0.005f
         
         // 置信度阈值
-        private const val CONFIDENCE_THRESHOLD = 0.3f
+        private const val CONFIDENCE_THRESHOLD = 0.15f
     }
     
     // 最小周期（样本数）
@@ -53,6 +53,8 @@ class PitchDetector(
     fun detectPitch(audioBuffer: FloatArray): PitchResult {
         // 1. 检查是否为静音
         val energy = calculateEnergy(audioBuffer)
+        timber.log.Timber.d("Audio energy: $energy (threshold: $SILENCE_THRESHOLD)")
+        
         if (energy < SILENCE_THRESHOLD) {
             return PitchResult(
                 frequency = 0f,
