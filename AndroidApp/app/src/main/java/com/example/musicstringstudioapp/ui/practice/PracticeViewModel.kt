@@ -1,6 +1,8 @@
 package com.example.musicstringstudioapp.ui.practice
 
+import android.Manifest
 import android.app.Application
+import androidx.annotation.RequiresPermission
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.musicstringstudioapp.domain.audio.AudioCaptureManager
@@ -83,6 +85,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     /**
      * 开始录音
      */
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun startRecording() {
         if (!audioCaptureManager.hasRecordPermission()) {
             _uiState.value = _uiState.value.copy(
@@ -91,7 +94,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             )
             return
         }
-        
+
         audioCaptureManager.startCapture(audioDataCallback)
         _uiState.value = _uiState.value.copy(
             isRecording = true,
@@ -120,6 +123,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     /**
      * 切换录音状态
      */
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun toggleRecording() {
         if (_uiState.value.isRecording) {
             stopRecording()
@@ -138,6 +142,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     /**
      * 权限已授予
      */
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun onPermissionGranted() {
         _uiState.value = _uiState.value.copy(
             needsPermission = false

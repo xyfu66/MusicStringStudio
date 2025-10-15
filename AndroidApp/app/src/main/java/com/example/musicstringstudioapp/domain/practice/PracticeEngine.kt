@@ -1,5 +1,7 @@
 package com.example.musicstringstudioapp.domain.practice
 
+import android.Manifest
+import androidx.annotation.RequiresPermission
 import com.example.musicstringstudioapp.data.model.Note
 import com.example.musicstringstudioapp.data.model.Song
 import com.example.musicstringstudioapp.domain.audio.AudioCaptureManager
@@ -91,6 +93,7 @@ class PracticeEngine(
     /**
      * 开始练习
      */
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     fun startPractice() {
         if (isPracticing) {
             Timber.w("练习已在进行中")

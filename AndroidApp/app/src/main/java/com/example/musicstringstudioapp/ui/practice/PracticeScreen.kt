@@ -29,7 +29,8 @@ fun PracticeScreen(
     // 录音权限
     val recordPermissionState = rememberPermissionState(
         Manifest.permission.RECORD_AUDIO
-    ) { isGranted ->
+    ) {
+        isGranted ->
         if (isGranted) {
             viewModel.onPermissionGranted()
         } else {
