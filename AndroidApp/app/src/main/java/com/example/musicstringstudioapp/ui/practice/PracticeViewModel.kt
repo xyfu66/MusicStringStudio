@@ -20,7 +20,7 @@ import timber.log.Timber
 class PracticeViewModel(application: Application) : AndroidViewModel(application) {
     
     // 音频采集管理器
-    private lateinit var audioCaptureManager: AudioCaptureManager
+    private val audioCaptureManager = AudioCaptureManager(getApplication())
     
     // 音高检测器
     private val pitchDetector = PitchDetector(sampleRate = 44100)
@@ -32,43 +32,25 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
     private val _uiState = MutableStateFlow(PracticeUiState())
     val uiState: StateFlow<PracticeUiState> = _uiState.asStateFlow()
     
-    init {
-        initializeAudioCapture()
-    }
-    
-    /**
-     * 初始化音频采集
-     */
-    private fun initializeAudioCapture() {
-        audioCaptureManager = AudioCaptureManager(
-            context = getApplication(),
-            onAudioDataAvailable = { audioData ->
-                processAudioData(audioData)
-            },
-            onError = { error ->
-                Timber.e("Audio capture error: $error")
-                viewModelScope.launch {
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = error
-                    )
-                }
-            }
-        )
+    // 音频数据回调
+    private val audioDataCallback = object : AudioCaptureManager.AudioDataCallback {
+        override fun onAudioData(audioData: ShortArray, sampleRate: Int) {
+            processAudioData(audioData, sampleRate)
+        }
     }
     
     /**
      * 处理音频数据
      */
-    private fun processAudioData(audioData: FloatArray) {
+    private fun processAudioData(audioData: ShortArray, sampleRate: Int) {
         viewModelScope.launch {
-            Timber.d("Processing audio data: ${audioData.size} samples")
+            // 处理音频数据
+            pitchDetector.processAudioData(audioData, sampleRate)
             
-            // 检测音高
-            val pitchResult = pitchDetector.detectPitch(audioData)
+            // 获取检测到的音高
+            val detectedPitch = pitchDetector.getLatestPitch()
             
-            Timber.d("Pitch detection result: freq=${pitchResult.frequency}, confidence=${pitchResult.confidence}, silent=${pitchResult.isSilent}")
-            
-            if (pitchResult.isSilent || pitchResult.frequency <= 0) {
+            if (detectedPitch == null || detectedPitch <= 0) {
                 // 静音或无法检测
                 _uiState.value = _uiState.value.copy(
                     detectedFrequency = 0f,
@@ -80,7 +62,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                 frequencySmoother.reset()
             } else {
                 // 平滑频率以减少抖动
-                val smoothedFrequency = frequencySmoother.addFrequency(pitchResult.frequency)
+                val smoothedFrequency = frequencySmoother.addFrequency(detectedPitch)
                 
                 // 分析频率
                 val analysis = FrequencyConverter.analyzeFrequency(smoothedFrequency)
@@ -90,7 +72,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
                     detectedFrequency = smoothedFrequency,
                     detectedNote = analysis.noteName,
                     centsDeviation = analysis.centsDeviation,
-                    confidence = pitchResult.confidence,
+                    confidence = 1.0f, // 简化版暂时使用固定置信度
                     accuracyLevel = analysis.accuracyLevel,
                     isSilent = false
                 )
@@ -110,7 +92,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
             return
         }
         
-        audioCaptureManager.startRecording()
+        audioCaptureManager.startCapture(audioDataCallback)
         _uiState.value = _uiState.value.copy(
             isRecording = true,
             errorMessage = null
@@ -122,7 +104,7 @@ class PracticeViewModel(application: Application) : AndroidViewModel(application
      * 停止录音
      */
     fun stopRecording() {
-        audioCaptureManager.stopRecording()
+        audioCaptureManager.stopCapture()
         frequencySmoother.reset()
         _uiState.value = _uiState.value.copy(
             isRecording = false,

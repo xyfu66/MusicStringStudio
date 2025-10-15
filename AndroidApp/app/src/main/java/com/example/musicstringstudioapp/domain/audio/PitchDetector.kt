@@ -35,6 +35,9 @@ class PitchDetector(
     // 最大周期（样本数）
     private val maxPeriod = (sampleRate / MIN_FREQUENCY).toInt()
     
+    // 最新检测到的音高
+    private var latestPitch: Float? = null
+    
     /**
      * 音高检测结果
      */
@@ -43,6 +46,38 @@ class PitchDetector(
         val confidence: Float,
         val isSilent: Boolean
     )
+    
+    /**
+     * 处理音频数据
+     * 
+     * @param audioData 音频数据（ShortArray）
+     * @param sampleRate 采样率
+     */
+    fun processAudioData(audioData: ShortArray, sampleRate: Int) {
+        // 转换为 FloatArray（归一化）
+        val floatBuffer = FloatArray(audioData.size) { i ->
+            audioData[i] / 32768.0f
+        }
+        
+        // 检测音高
+        val result = detectPitch(floatBuffer)
+        
+        // 更新最新音高
+        latestPitch = if (result.isSilent || result.frequency <= 0f) {
+            null
+        } else {
+            result.frequency
+        }
+    }
+    
+    /**
+     * 获取最新检测到的音高
+     * 
+     * @return 频率（Hz），null 表示未检测到
+     */
+    fun getLatestPitch(): Float? {
+        return latestPitch
+    }
     
     /**
      * 检测音频样本中的音高

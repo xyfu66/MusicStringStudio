@@ -20,14 +20,18 @@ import timber.log.Timber
  * 负责实时采集音频数据并通过回调提供给音高检测模块
  * 
  * @property context Android Context
- * @property onAudioDataAvailable 音频数据回调，参数为 PCM 音频样本数组
- * @property onError 错误回调
  */
 class AudioCaptureManager(
-    private val context: Context,
-    private val onAudioDataAvailable: (FloatArray) -> Unit,
-    private val onError: (String) -> Unit
+    private val context: Context
 ) {
+    
+    /**
+     * 音频数据回调接口
+     */
+    interface AudioDataCallback {
+        fun onAudioData(audioData: ShortArray, sampleRate: Int)
+    }
+    
     companion object {
         // 音频采样率 - 44100Hz (CD音质)
         private const val SAMPLE_RATE = 44100
@@ -58,11 +62,11 @@ class AudioCaptureManager(
     // 录音状态
     private var isRecording = false
     
+    // 当前回调
+    private var currentCallback: AudioDataCallback? = null
+    
     // 短整型缓冲区（从 AudioRecord 读取）
     private val shortBuffer = ShortArray(BUFFER_SIZE_IN_SAMPLES)
-    
-    // 浮点型缓冲区（转换后用于音高检测）
-    private val floatBuffer = FloatArray(BUFFER_SIZE_IN_SAMPLES)
     
     /**
      * 检查录音权限
@@ -85,7 +89,7 @@ class AudioCaptureManager(
         }
         
         if (!hasRecordPermission()) {
-            onError("没有录音权限")
+            Timber.e("没有录音权限")
             return false
         }
         
@@ -105,7 +109,7 @@ class AudioCaptureManager(
             // 检查状态
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
                 audioRecord = null
-                onError("AudioRecord 初始化失败")
+                Timber.e("AudioRecord 初始化失败")
                 return false
             }
             
@@ -115,18 +119,39 @@ class AudioCaptureManager(
             return true
         } catch (e: Exception) {
             Timber.e(e, "Failed to initialize AudioRecord")
-            onError("初始化音频采集失败: ${e.message}")
             return false
         }
     }
     
     /**
-     * 开始录音
+     * 开始采集（使用回调）
      */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
-    fun startRecording() {
+    fun startCapture(callback: AudioDataCallback) {
+        currentCallback = callback
+        startRecording()
+    }
+    
+    /**
+     * 停止采集
+     */
+    fun stopCapture() {
+        stopRecording()
+        currentCallback = null
+    }
+    
+    /**
+     * 开始录音（内部方法）
+     */
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
+    private fun startRecording() {
         if (isRecording) {
             Timber.w("Already recording")
+            return
+        }
+        
+        if (!hasRecordPermission()) {
+            Timber.e("No record permission")
             return
         }
         
@@ -146,7 +171,6 @@ class AudioCaptureManager(
             Timber.d("Recording started")
         } catch (e: Exception) {
             Timber.e(e, "Failed to start recording")
-            onError("开始录音失败: ${e.message}")
             isRecording = false
         }
     }
@@ -154,7 +178,7 @@ class AudioCaptureManager(
     /**
      * 停止录音
      */
-    fun stopRecording() {
+    private fun stopRecording() {
         if (!isRecording) {
             Timber.w("Not recording")
             return
@@ -203,29 +227,22 @@ class AudioCaptureManager(
                 ) ?: 0
                 
                 if (bytesRead > 0) {
-                    // 转换为浮点数（归一化到 -1.0 到 1.0）
-                    for (i in 0 until bytesRead) {
-                        floatBuffer[i] = shortBuffer[i] / 32768.0f
-                    }
-                    
                     // 只传递有效数据
                     val validData = if (bytesRead < BUFFER_SIZE_IN_SAMPLES) {
-                        floatBuffer.copyOf(bytesRead)
+                        shortBuffer.copyOf(bytesRead)
                     } else {
-                        floatBuffer
+                        shortBuffer.copyOf()
                     }
                     
                     // 回调音频数据
-                    onAudioDataAvailable(validData)
+                    currentCallback?.onAudioData(validData, SAMPLE_RATE)
                 } else if (bytesRead < 0) {
                     // 读取出错
                     Timber.e("Error reading audio data: $bytesRead")
-                    onError("读取音频数据失败")
                     break
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Error in recording loop")
-                onError("录音过程出错: ${e.message}")
                 break
             }
         }
